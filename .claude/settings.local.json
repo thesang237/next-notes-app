@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(yes)",
+      "Bash(npx shadcn@latest init --defaults)",
+      "Bash(npm run:*)",
+      "Bash(find node_modules -name tailwind.css -path *shadcn*)",
+      "Bash(node:*)",
+      "Bash(find node_modules/@base-ui/react -name *.css)",
+      "Bash(find C:/0-Sang/Code/next-notes-app/node_modules/@base-ui/react -name *.css)",
+      "Bash(xargs cat:*)",
+      "Bash(find C:/0-Sang/Code/next-notes-app/src/components/note-board -name *.tsx)",
+      "Bash(xargs ls:*)",
+      "Bash(xargs wc:*)",
+      "Bash(find C:/0-Sang/Code/next-notes-app/.next -name *.css)"
+    ]
+  }
+}
