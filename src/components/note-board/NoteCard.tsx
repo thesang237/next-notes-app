@@ -1,6 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
+import { Check } from 'lucide-react';
 import { useNotesStore } from '@/store/useNotesStore';
 import { formatNoteTime } from '@/lib/utils';
 import { NEUTRAL_NOTE_COLOR } from '@/lib/constants';
@@ -36,7 +37,8 @@ export function NoteCard({ note, onClick }: NoteCardProps) {
 
       <div className="mt-3 pt-2.5 border-t border-black/[0.06]">
         {note.isSolved ? (
-          <p className="text-xs text-[#1a1a1a]/50 font-ui">
+          <p className="flex items-center gap-1 text-xs text-[#1a1a1a]/50 font-ui">
+            <Check className="size-3" />
             Solved · {footerTime}
           </p>
         ) : (

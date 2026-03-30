@@ -15,6 +15,8 @@ interface NotesState {
   updateCategory: (id: string, updates: Partial<Pick<Category, 'name' | 'color'>>) => void;
   removeCategory: (id: string) => void;
   setActiveBoardFilter: (categoryId: string | null) => void;
+  restoreNote: (note: Note, index: number) => void;
+  importData: (data: { notes: Note[]; categories: Category[] }, mode: 'replace' | 'merge') => void;
 }
 
 export const useNotesStore = create<NotesState>()(
@@ -101,6 +103,26 @@ export const useNotesStore = create<NotesState>()(
 
       setActiveBoardFilter: (categoryId) =>
         set({ activeBoardFilter: categoryId }),
+
+      restoreNote: (note, index) =>
+        set((state) => {
+          const arr = [...state.notes];
+          arr.splice(index, 0, note);
+          return { notes: arr };
+        }),
+
+      importData: (data, mode) =>
+        set((state) => {
+          if (mode === 'replace') {
+            return { notes: data.notes, categories: data.categories, activeBoardFilter: null };
+          }
+          const existingNoteIds = new Set(state.notes.map((n) => n.id));
+          const existingCategoryIds = new Set(state.categories.map((c) => c.id));
+          return {
+            notes: [...state.notes, ...data.notes.filter((n) => !existingNoteIds.has(n.id))],
+            categories: [...state.categories, ...data.categories.filter((c) => !existingCategoryIds.has(c.id))],
+          };
+        }),
     }),
     {
       name: 'notes-storage',

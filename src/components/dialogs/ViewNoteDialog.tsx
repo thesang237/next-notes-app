@@ -8,8 +8,9 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { CategoryTabRow } from '@/components/category/CategoryTabRow';
 import { DeleteConfirmDialog } from './DeleteConfirmDialog';
 import { useNotesStore } from '@/store/useNotesStore';
+import { toast } from 'sonner';
 import { useAutoResizeTextarea } from '@/hooks/useAutoResizeTextarea';
-import { getDynamicFontSize } from '@/lib/constants';
+import { getDynamicFontSize, NEUTRAL_NOTE_COLOR } from '@/lib/constants';
 import { formatNoteTime } from '@/lib/utils';
 import type { Note } from '@/lib/types';
 
@@ -27,7 +28,7 @@ export function ViewNoteDialog({ note, open, onOpenChange }: ViewNoteDialogProps
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const resize = useAutoResizeTextarea(textareaRef);
 
-  const { notes, updateNote, deleteNote } = useNotesStore();
+  const { notes, categories, updateNote, deleteNote, restoreNote } = useNotesStore();
 
   // Live store note — used for up-to-date comparison in handleClose
   const liveNote = notes.find((n) => n.id === note?.id) ?? note;
@@ -82,10 +83,19 @@ export function ViewNoteDialog({ note, open, onOpenChange }: ViewNoteDialogProps
 
   const handleDelete = useCallback(() => {
     if (!note) return;
+    const index = notes.findIndex((n) => n.id === note.id);
+    const snapshot = { ...note };
     deleteNote(note.id);
     setDeleteOpen(false);
     onOpenChange(false);
-  }, [note, deleteNote, onOpenChange]);
+    toast('Note deleted.', {
+      action: {
+        label: 'Undo',
+        onClick: () => restoreNote(snapshot, index === -1 ? 0 : index),
+      },
+      duration: 5000,
+    });
+  }, [note, notes, deleteNote, restoreNote, onOpenChange]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -104,6 +114,8 @@ export function ViewNoteDialog({ note, open, onOpenChange }: ViewNoteDialogProps
   if (!note) return null;
 
   const fontSize = getDynamicFontSize(content.length);
+  const category = categories.find((c) => c.id === categoryId);
+  const bgColor = category?.color ?? NEUTRAL_NOTE_COLOR;
 
   const historyByType = [...(liveNote?.history ?? note.history)].sort((a, b) => {
     const order = { solved: 0, edited: 1, created: 2 };
@@ -151,23 +163,29 @@ export function ViewNoteDialog({ note, open, onOpenChange }: ViewNoteDialogProps
 
             {/* Textarea */}
             <div className="px-6 py-5">
-              <textarea
-                ref={textareaRef}
-                value={content}
-                onChange={(e) => {
-                  setContent(e.target.value);
-                  resize();
-                }}
-                onKeyDown={handleKeyDown}
-                placeholder="Note content..."
-                rows={1}
-                className="w-full resize-none bg-transparent outline-none placeholder:text-muted-foreground/50 leading-relaxed font-content"
-                style={{
-                  fontSize: `${fontSize}px`,
-                  transition: 'font-size 0.2s ease',
-                  minHeight: '120px',
-                }}
-              />
+              <div
+                className="rounded-2xl p-5 shadow-sm ring-1 ring-black/[0.04]"
+                style={{ backgroundColor: bgColor }}
+              >
+                <textarea
+                  ref={textareaRef}
+                  value={content}
+                  onChange={(e) => {
+                    setContent(e.target.value);
+                    resize();
+                  }}
+                  onKeyDown={handleKeyDown}
+                  placeholder="Note content..."
+                  rows={1}
+                  className="w-full resize-none bg-transparent outline-none placeholder:text-[#1a1a1a]/40 leading-relaxed font-content overflow-y-auto text-[#1a1a1a]"
+                  style={{
+                    fontSize: `${fontSize}px`,
+                    transition: 'font-size 0.2s ease',
+                    minHeight: '120px',
+                    maxHeight: '40vh',
+                  }}
+                />
+              </div>
             </div>
 
             {/* Solved checkbox */}
