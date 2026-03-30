@@ -3,7 +3,7 @@
 import { motion } from 'framer-motion';
 import { Check } from 'lucide-react';
 import { useNotesStore } from '@/store/useNotesStore';
-import { formatNoteTime } from '@/lib/utils';
+import { formatNoteTime, plainTextToHtml } from '@/lib/utils';
 import { NEUTRAL_NOTE_COLOR } from '@/lib/constants';
 import type { Note } from '@/lib/types';
 
@@ -31,9 +31,11 @@ export function NoteCard({ note, onClick }: NoteCardProps) {
       aria-label={`Note: ${note.content.slice(0, 60)}`}
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onClick(); }}
     >
-      <p className="flex-1 text-sm leading-relaxed text-[#1a1a1a] line-clamp-6 font-content">
-        {note.content}
-      </p>
+      <div
+        className="rich-text flex-1 text-sm leading-relaxed text-[#1a1a1a] font-content overflow-hidden"
+        style={{ maxHeight: '9em' }}
+        dangerouslySetInnerHTML={{ __html: plainTextToHtml(note.content) }}
+      />
 
       <div className="mt-3 pt-2.5 border-t border-black/[0.06]">
         {note.isSolved ? (

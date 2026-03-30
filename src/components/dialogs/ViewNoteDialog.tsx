@@ -1,17 +1,17 @@
 'use client';
 
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { X, Trash2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
 import { CategoryTabRow } from '@/components/category/CategoryTabRow';
 import { DeleteConfirmDialog } from './DeleteConfirmDialog';
+import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import { useNotesStore } from '@/store/useNotesStore';
 import { toast } from 'sonner';
-import { useAutoResizeTextarea } from '@/hooks/useAutoResizeTextarea';
 import { getDynamicFontSize, NEUTRAL_NOTE_COLOR } from '@/lib/constants';
-import { formatNoteTime } from '@/lib/utils';
+import { formatNoteTime, plainTextToHtml, htmlToText, isHtmlEmpty } from '@/lib/utils';
 import type { Note } from '@/lib/types';
 
 interface ViewNoteDialogProps {
@@ -21,12 +21,10 @@ interface ViewNoteDialogProps {
 }
 
 export function ViewNoteDialog({ note, open, onOpenChange }: ViewNoteDialogProps) {
-  const [content, setContent] = useState('');
+  const [htmlContent, setHtmlContent] = useState('');
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [isSolved, setIsSolved] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const resize = useAutoResizeTextarea(textareaRef);
 
   const { notes, categories, updateNote, deleteNote, restoreNote } = useNotesStore();
 
@@ -36,49 +34,36 @@ export function ViewNoteDialog({ note, open, onOpenChange }: ViewNoteDialogProps
   // Sync local state when the dialog opens for a note
   useEffect(() => {
     if (note && open) {
-      setContent(note.content);
+      setHtmlContent(plainTextToHtml(note.content));
       setCategoryId(note.categoryId);
       setIsSolved(note.isSolved);
-      setTimeout(() => {
-        resize();
-      }, 80);
     }
-  }, [note, open, resize]);
+  }, [note, open]);
 
   const handleClose = useCallback(() => {
     if (!note || !liveNote) return;
-    const trimmed = content.trim();
-    // Compare against the live store note so that changes already saved by
-    // handleSolvedChange (which persists content + categoryId together with
-    // isSolved) are not double-written and don't create a spurious "edited" entry.
+    const liveHtml = plainTextToHtml(liveNote.content);
     const hasChanges =
-      trimmed !== liveNote.content ||
+      htmlContent !== liveHtml ||
       categoryId !== liveNote.categoryId;
 
-    if (hasChanges && trimmed) {
-      updateNote(note.id, {
-        content: trimmed,
-        categoryId,
-      });
+    if (hasChanges && !isHtmlEmpty(htmlContent)) {
+      updateNote(note.id, { content: htmlContent, categoryId });
     }
     onOpenChange(false);
-  }, [note, liveNote, content, categoryId, updateNote, onOpenChange]);
+  }, [note, liveNote, htmlContent, categoryId, updateNote, onOpenChange]);
 
   const handleSolvedChange = useCallback(
     (checked: boolean) => {
       if (!note) return;
       setIsSolved(checked);
-      // Save content + categoryId alongside isSolved so they land in the store
-      // atomically. The store skips "edited" whenever isSolved is present in the
-      // update, so this never creates a spurious "edited" entry.
-      const trimmed = content.trim();
       updateNote(note.id, {
         isSolved: checked,
-        content: trimmed || note.content,
+        content: isHtmlEmpty(htmlContent) ? note.content : htmlContent,
         categoryId,
       });
     },
-    [note, content, categoryId, updateNote]
+    [note, htmlContent, categoryId, updateNote]
   );
 
   const handleDelete = useCallback(() => {
@@ -97,23 +82,10 @@ export function ViewNoteDialog({ note, open, onOpenChange }: ViewNoteDialogProps
     });
   }, [note, notes, deleteNote, restoreNote, onOpenChange]);
 
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        handleClose();
-      }
-      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-        e.preventDefault();
-        handleClose();
-      }
-    },
-    [handleClose]
-  );
-
   if (!note) return null;
 
-  const fontSize = getDynamicFontSize(content.length);
+  const textLength = htmlToText(htmlContent).length;
+  const fontSize = getDynamicFontSize(textLength);
   const category = categories.find((c) => c.id === categoryId);
   const bgColor = category?.color ?? NEUTRAL_NOTE_COLOR;
 
@@ -161,31 +133,19 @@ export function ViewNoteDialog({ note, open, onOpenChange }: ViewNoteDialogProps
               </button>
             </div>
 
-            {/* Textarea */}
+            {/* Rich text editor */}
             <div className="px-6 py-5">
-              <div
-                className="rounded-2xl p-5 shadow-sm ring-1 ring-black/[0.04]"
-                style={{ backgroundColor: bgColor }}
-              >
-                <textarea
-                  ref={textareaRef}
-                  value={content}
-                  onChange={(e) => {
-                    setContent(e.target.value);
-                    resize();
-                  }}
-                  onKeyDown={handleKeyDown}
-                  placeholder="Note content..."
-                  rows={1}
-                  className="w-full resize-none bg-transparent outline-none placeholder:text-[#1a1a1a]/40 leading-relaxed font-content overflow-y-auto text-[#1a1a1a]"
-                  style={{
-                    fontSize: `${fontSize}px`,
-                    transition: 'font-size 0.2s ease',
-                    minHeight: '120px',
-                    maxHeight: '40vh',
-                  }}
-                />
-              </div>
+              <RichTextEditor
+                content={htmlContent}
+                onChange={setHtmlContent}
+                placeholder="Note content..."
+                minHeight="120px"
+                maxHeight="40vh"
+                fontSize={fontSize}
+                bgColor={bgColor}
+                onEscape={handleClose}
+                onSave={handleClose}
+              />
             </div>
 
             {/* Solved checkbox */}
