@@ -173,7 +173,8 @@
 }
 
 /* Rich text content styles */
-.rich-text p { margin: 0; }
+.rich-text { overflow-wrap: anywhere; word-break: break-word; }
+.rich-text p { margin: 0; overflow-wrap: anywhere; word-break: break-word; }
 .rich-text p + p { margin-top: 0.5em; }
 .rich-text strong { font-weight: 600; }
 .rich-text em { font-style: italic; }

@@ -40,7 +40,7 @@ export function RichTextEditor({
       onChange(editor.getHTML());
     },
     editorProps: {
-      attributes: { class: 'outline-none' },
+      attributes: { class: 'outline-none break-words w-full max-w-full' },
       handleKeyDown: (_view, event) => {
         if (event.key === 'Escape') {
           event.preventDefault();
