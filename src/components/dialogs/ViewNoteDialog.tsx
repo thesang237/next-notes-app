@@ -82,6 +82,21 @@ export function ViewNoteDialog({ note, open, onOpenChange }: ViewNoteDialogProps
     });
   }, [note, notes, deleteNote, restoreNote, onOpenChange]);
 
+  // Global Cmd/Ctrl + Enter to save/close, even when focus is on other elements
+  useEffect(() => {
+    if (!open) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+        e.preventDefault();
+        handleClose();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [open, handleClose]);
+
   if (!note) return null;
 
   const textLength = htmlToText(htmlContent).length;

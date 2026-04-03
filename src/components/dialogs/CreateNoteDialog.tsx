@@ -70,6 +70,21 @@ export function CreateNoteDialog({ open, onOpenChange }: CreateNoteDialogProps) 
     }
   }, [open]);
 
+  // Global Cmd/Ctrl + Enter to save, even when focus is on category tabs or other elements
+  useEffect(() => {
+    if (!open) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+        e.preventDefault();
+        handleSave();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [open, handleSave]);
+
   const textLength = htmlToText(htmlContent).length;
   const fontSize = getDynamicFontSize(textLength);
   const category = categories.find((c) => c.id === categoryId);
