@@ -16,4 +16,5 @@ export interface Note {
   isSolved: boolean;
   history: HistoryEntry[];
   createdAt: string; // ISO string
+  thumbnail?: string; // base64 data URL
 }

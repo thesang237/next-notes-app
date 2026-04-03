@@ -39,7 +39,43 @@ export function FontCommandDialog({
   const [query, setQuery] = useState('');
   const [focusedIndex, setFocusedIndex] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [googleFontsList, setGoogleFontsList] = useState<FontOption[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
+  const originalFontRef = useRef<FontOption>(activeFont);
+
+  // Static popular Google Fonts (fallback for realtime search to avoid CORS/fetch errors)
+  const STATIC_GOOGLE_FONTS: FontOption[] = [
+    { id: 'google-roboto', name: 'Roboto', value: "'Roboto', sans-serif", type: 'google' },
+    { id: 'google-opensans', name: 'Open Sans', value: "'Open Sans', sans-serif", type: 'google' },
+    { id: 'google-lato', name: 'Lato', value: "'Lato', sans-serif", type: 'google' },
+    { id: 'google-montserrat', name: 'Montserrat', value: "'Montserrat', sans-serif", type: 'google' },
+    { id: 'google-oswald', name: 'Oswald', value: "'Oswald', sans-serif", type: 'google' },
+    { id: 'google-raleway', name: 'Raleway', value: "'Raleway', sans-serif", type: 'google' },
+    { id: 'google-poppins', name: 'Poppins', value: "'Poppins', sans-serif", type: 'google' },
+    { id: 'google-inter', name: 'Inter', value: "'Inter', sans-serif", type: 'google' },
+    { id: 'google-robotoslab', name: 'Roboto Slab', value: "'Roboto Slab', serif", type: 'google' },
+    { id: 'google-playfair', name: 'Playfair Display', value: "'Playfair Display', serif", type: 'google' },
+    { id: 'google-merriweather', name: 'Merriweather', value: "'Merriweather', serif", type: 'google' },
+    { id: 'google-lora', name: 'Lora', value: "'Lora', serif", type: 'google' },
+    { id: 'google-ptserif', name: 'PT Serif', value: "'PT Serif', serif", type: 'google' },
+    { id: 'google-crimson', name: 'Crimson Text', value: "'Crimson Text', serif", type: 'google' },
+    { id: 'google-sourcecodepro', name: 'Source Code Pro', value: "'Source Code Pro', monospace", type: 'google' },
+    { id: 'google-firasans', name: 'Fira Sans', value: "'Fira Sans', sans-serif", type: 'google' },
+    { id: 'google-ubuntu', name: 'Ubuntu', value: "'Ubuntu', sans-serif", type: 'google' },
+    { id: 'google-dmsans', name: 'DM Sans', value: "'DM Sans', sans-serif", type: 'google' },
+    { id: 'google-work-sans', name: 'Work Sans', value: "'Work Sans', sans-serif", type: 'google' },
+    { id: 'google-jost', name: 'Jost', value: "'Jost', sans-serif", type: 'google' },
+    { id: 'google-manrope', name: 'Manrope', value: "'Manrope', sans-serif", type: 'google' },
+    { id: 'google-figtree', name: 'Figtree', value: "'Figtree', sans-serif", type: 'google' },
+    { id: 'google-spacegrotesk', name: 'Space Grotesk', value: "'Space Grotesk', sans-serif", type: 'google' },
+    { id: 'google-geist', name: 'Geist', value: "'Geist', sans-serif", type: 'google' },
+    { id: 'google-geistsans', name: 'Geist Sans', value: "'Geist Sans', sans-serif", type: 'google' },
+    { id: 'google-geistmono', name: 'Geist Mono', value: "'Geist Mono', monospace", type: 'google' },
+    { id: 'google-commissioner', name: 'Commissioner', value: "'Commissioner', sans-serif", type: 'google' },
+    { id: 'google-instrument-sans', name: 'Instrument Sans', value: "'Instrument Sans', sans-serif", type: 'google' },
+    { id: 'google-instrument-serif', name: 'Instrument Serif', value: "'Instrument Serif', serif", type: 'google' },
+    { id: 'google-bebasneue', name: 'Bebas Neue', value: "'Bebas Neue', sans-serif", type: 'google' },
+  ];
 
   // Build the full font list: defaults + active google font at end
   const fontList = useMemo<FontOption[]>(() => {
@@ -49,13 +85,23 @@ export function FontCommandDialog({
     return DEFAULT_FONTS;
   }, [activeFont]);
 
-  // Filtered list based on query
+  // Filtered google fonts for realtime search (limit to 20)
+  const filteredGoogle = useMemo(() => {
+    if (!query || !googleFontsList.length) return [];
+    return googleFontsList
+      .filter((f) => f.name.toLowerCase().includes(query.toLowerCase()))
+      .slice(0, 20);
+  }, [query, googleFontsList]);
+
+  // Filtered list based on query: defaults + matching google
   const filteredFonts = useMemo(() => {
-    if (!query) return fontList;
-    return fontList.filter((f) =>
-      f.name.toLowerCase().includes(query.toLowerCase())
-    );
-  }, [fontList, query]);
+    const defFiltered = !query 
+      ? fontList 
+      : fontList.filter((f) =>
+          f.name.toLowerCase().includes(query.toLowerCase())
+        );
+    return [...defFiltered, ...filteredGoogle];
+  }, [fontList, query, filteredGoogle]);
 
   // Whether to show "Use as Google Font" option
   const queryIsDefault = DEFAULT_FONTS.some(
@@ -64,8 +110,11 @@ export function FontCommandDialog({
   const queryIsActiveGoogle =
     activeFont.type === 'google' &&
     activeFont.name.toLowerCase() === query.toLowerCase();
+  const queryMatchesAnyGoogle = googleFontsList.some(
+    (f) => f.name.toLowerCase() === query.toLowerCase()
+  );
   const showGoogleOption =
-    query.trim().length > 0 && !queryIsDefault && !queryIsActiveGoogle;
+    query.trim().length > 0 && !queryIsDefault && !queryIsActiveGoogle && !queryMatchesAnyGoogle;
 
   const totalItems = filteredFonts.length + (showGoogleOption ? 1 : 0);
 
@@ -76,19 +125,55 @@ export function FontCommandDialog({
       setFocusedIndex(0);
       setLoading(false);
       setTimeout(() => inputRef.current?.focus(), 0);
+      originalFontRef.current = activeFont; // STEP 4: save original for revert on close
+      setGoogleFontsList(STATIC_GOOGLE_FONTS); // STEP 3: use static list for realtime (avoids fetch/CORS error)
+    } else if (originalFontRef.current) {
+      // revert to original if not committed by final select
+      document.documentElement.style.setProperty('--font-app', originalFontRef.current.value);
     }
-  }, [open]);
+  }, [open, activeFont]);
 
   // Keep focusedIndex in bounds when list changes
   useEffect(() => {
     setFocusedIndex((prev) => Math.min(prev, Math.max(0, totalItems - 1)));
   }, [totalItems]);
 
+  // STEP 6: live preview on focus/hover - update font temporarily
+  useEffect(() => {
+    if (!open) return;
+    let font: FontOption | null = null;
+    if (focusedIndex < filteredFonts.length) {
+      font = filteredFonts[focusedIndex];
+    } else if (showGoogleOption && focusedIndex === filteredFonts.length) {
+      const q = query.trim();
+      if (q) {
+        font = {
+          id: `google-${q}`,
+          name: q,
+          value: `'${q}', sans-serif`,
+          type: 'google',
+        };
+      }
+    }
+    if (font) {
+      const applyPreview = async () => {
+        if (font!.type === 'google') {
+          try {
+            await loadGoogleFont(font!.name);
+          } catch {}
+        }
+        document.documentElement.style.setProperty('--font-app', font!.value);
+      };
+      applyPreview();
+    }
+  }, [focusedIndex, filteredFonts, showGoogleOption, query, open]);
+
   const handleSelectFont = useCallback(
     async (font: FontOption) => {
       setLoading(true);
       try {
         await onSelectFont(font);
+        originalFontRef.current = font; // STEP 5: update original after commit so no revert on close
         onOpenChange(false);
       } catch {
         toast.error(`Could not apply font "${font.name}".`);
@@ -112,6 +197,7 @@ export function FontCommandDialog({
         type: 'google',
       };
       await onSelectFont(googleFont);
+      originalFontRef.current = googleFont; // STEP 5: update original after commit
       onOpenChange(false);
     } catch {
       toast.error(`Could not load Google Font "${name}". Check the spelling.`);
@@ -151,7 +237,7 @@ export function FontCommandDialog({
   return (
     <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
       <DialogPrimitive.Portal>
-        <DialogPrimitive.Backdrop className="fixed inset-0 isolate z-50 bg-black/10 duration-100 supports-backdrop-filter:backdrop-blur-xs data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0" />
+        <DialogPrimitive.Backdrop className="fixed inset-0 isolate z-50 bg-black/5 duration-100 data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0" />
         <DialogPrimitive.Popup className="fixed top-[20%] left-1/2 z-50 w-full max-w-[calc(100%-2rem)] -translate-x-1/2 overflow-hidden rounded-xl bg-popover text-popover-foreground ring-1 ring-foreground/10 shadow-xl duration-100 outline-none sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95">
           {/* Search input */}
           <div className="flex items-center gap-2 border-b border-border px-3 py-2.5">

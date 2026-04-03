@@ -106,7 +106,7 @@ export function CategoryTabRow({
                   ? 'pr-7'
                   : 'pr-3 group-hover/pill:pr-7',
                 isSelected(cat.id)
-                  ? 'shadow-[0_0_0_2px_#1a1a1a] bg-[#1a1a1a] text-white'
+                  ? 'shadow-sm bg-foreground text-background'
                   : 'bg-muted/60 hover:bg-muted text-foreground/80 hover:text-foreground'
               )}
             >
@@ -135,7 +135,7 @@ export function CategoryTabRow({
                     ? 'opacity-100 scale-100'
                     : 'opacity-0 scale-75 group-hover/pill:opacity-100 group-hover/pill:scale-100',
                   isSelected(cat.id)
-                    ? 'text-white/60 hover:text-white'
+                    ? 'text-background/60 hover:text-background'
                     : 'text-foreground/40 hover:text-foreground'
                 )}
               >

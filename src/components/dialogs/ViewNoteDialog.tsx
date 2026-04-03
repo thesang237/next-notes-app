@@ -89,10 +89,9 @@ export function ViewNoteDialog({ note, open, onOpenChange }: ViewNoteDialogProps
   const category = categories.find((c) => c.id === categoryId);
   const bgColor = category?.color ?? NEUTRAL_NOTE_COLOR;
 
-  const historyByType = [...(liveNote?.history ?? note.history)].sort((a, b) => {
-    const order = { solved: 0, edited: 1, created: 2 };
-    return order[a.type] - order[b.type];
-  });
+  // Only show the last (most recent by timestamp) action for history label
+  const latestHistory = [...(liveNote?.history ?? note.history)]
+    .sort((a, b) => b.timestamp - a.timestamp)[0];
 
   const historyLabel: Record<string, string> = {
     created: 'Created',
@@ -161,16 +160,14 @@ export function ViewNoteDialog({ note, open, onOpenChange }: ViewNoteDialogProps
               </label>
             </div>
 
-            {/* History log */}
-            <div className="px-6 pb-4">
-              <ul className="space-y-0.5">
-                {historyByType.map((entry, i) => (
-                  <li key={i} className="text-xs text-muted-foreground/60">
-                    {historyLabel[entry.type]} at {formatNoteTime(entry.timestamp)}
-                  </li>
-                ))}
-              </ul>
-            </div>
+            {/* History log - only last action */}
+            {latestHistory && (
+              <div className="px-6 pb-4">
+                <div className="text-xs text-muted-foreground/60">
+                  {historyLabel[latestHistory.type]} at {formatNoteTime(latestHistory.timestamp)}
+                </div>
+              </div>
+            )}
 
             {/* Footer */}
             <div className="flex items-center justify-between px-6 py-4 border-t border-border/50 bg-muted/20">

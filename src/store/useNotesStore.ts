@@ -8,8 +8,8 @@ interface NotesState {
   categories: Category[];
   activeBoardFilter: string | null;
 
-  addNote: (content: string, categoryId: string | null) => void;
-  updateNote: (id: string, updates: Partial<Pick<Note, 'content' | 'categoryId' | 'isSolved'>>) => void;
+  addNote: (content: string, categoryId: string | null, thumbnail?: string) => void;
+  updateNote: (id: string, updates: Partial<Pick<Note, 'content' | 'categoryId' | 'isSolved' | 'thumbnail'>>) => void;
   deleteNote: (id: string) => void;
   addCategory: (name: string, color: string) => string;
   updateCategory: (id: string, updates: Partial<Pick<Category, 'name' | 'color'>>) => void;
@@ -26,7 +26,7 @@ export const useNotesStore = create<NotesState>()(
       categories: [],
       activeBoardFilter: null,
 
-      addNote: (content, categoryId) =>
+      addNote: (content, categoryId, thumbnail) =>
         set((state) => ({
           notes: [
             {
@@ -36,6 +36,7 @@ export const useNotesStore = create<NotesState>()(
               isSolved: false,
               history: [{ type: 'created', timestamp: new Date().toISOString() }],
               createdAt: new Date().toISOString(),
+              ...(thumbnail && { thumbnail }),
             },
             ...state.notes,
           ],

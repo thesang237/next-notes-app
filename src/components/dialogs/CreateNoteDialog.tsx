@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import { X } from 'lucide-react';
+import { X, Image as ImageIcon } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { CategoryTabRow } from '@/components/category/CategoryTabRow';
@@ -19,15 +19,16 @@ interface CreateNoteDialogProps {
 export function CreateNoteDialog({ open, onOpenChange }: CreateNoteDialogProps) {
   const [htmlContent, setHtmlContent] = useState('<p></p>');
   const [categoryId, setCategoryId] = useState<string | null>(null);
+  const [thumbnail, setThumbnail] = useState<string | null>(null);
   const [discardOpen, setDiscardOpen] = useState(false);
 
   const { addNote, categories } = useNotesStore();
 
   const handleSave = useCallback(() => {
     if (isHtmlEmpty(htmlContent)) return;
-    addNote(htmlContent, categoryId);
+    addNote(htmlContent, categoryId, thumbnail ?? undefined);
     onOpenChange(false);
-  }, [htmlContent, categoryId, addNote, onOpenChange]);
+  }, [htmlContent, categoryId, thumbnail, addNote, onOpenChange]);
 
   const handleClose = useCallback(() => {
     if (!isHtmlEmpty(htmlContent)) {
@@ -40,9 +41,22 @@ export function CreateNoteDialog({ open, onOpenChange }: CreateNoteDialogProps) 
   const handleDiscard = useCallback(() => {
     setHtmlContent('<p></p>');
     setCategoryId(null);
+    setThumbnail(null);
     setDiscardOpen(false);
     onOpenChange(false);
   }, [onOpenChange]);
+
+  const handleThumbnailUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !file.type.startsWith('image/')) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      setThumbnail(event.target?.result as string);
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  }, []);
 
   const textLength = htmlToText(htmlContent).length;
   const fontSize = getDynamicFontSize(textLength);
