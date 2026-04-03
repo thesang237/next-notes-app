@@ -16,8 +16,26 @@ const outfit = Outfit({
 });
 
 export const metadata: Metadata = {
-  title: "Notes",
+  title: "Next Level Notes",
   description: "A minimal, warm note-taking app",
+  openGraph: {
+    title: "Next Level Notes",
+    description: "A minimal, warm note-taking app",
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "Next Level Notes - A minimal, warm note-taking app",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Next Level Notes",
+    description: "A minimal, warm note-taking app",
+    images: ["/og-image.png"],
+  },
 };
 
 export default function RootLayout({
