@@ -17,7 +17,8 @@
       "Bash(find /c/0-Sang/Code/next-notes-app/src -type f -name *.tsx -o -name *.ts)",
       "Bash(grep -r \"onSelect\\\\|onClick\" C:/0-Sang/Code/next-notes-app/node_modules/@base-ui-components/react/menu --include=*.d.ts -l)",
       "Bash(find C:/0-Sang/Code/next-notes-app/node_modules -path */base-ui* -name *.d.ts)",
-      "Bash(npm install:*)"
+      "Bash(npm install:*)",
+      "Bash(ls -la /c/0-Sang/Code/next-notes-app/*.config.*)"
     ]
   }
 }

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback, useRef } from 'react';
-import { MoreVertical, Download, Upload, Moon, Sun } from 'lucide-react';
+import { MoreVertical, Download, Upload, Moon, Sun, Type } from 'lucide-react';
 import { NoteBoard } from '@/components/note-board/NoteBoard';
 import { CreateNoteDialog } from '@/components/dialogs/CreateNoteDialog';
 import { useGlobalKeyboard } from '@/hooks/useGlobalKeyboard';
@@ -15,16 +15,20 @@ import { useNotesStore } from '@/store/useNotesStore';
 import { useDarkMode } from '@/hooks/useDarkMode';
 import { DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { ImportConfirmDialog } from '@/components/dialogs/ImportConfirmDialog';
+import { FontCommandDialog } from '@/components/font-command-dialog';
+import { useFont } from '@/hooks/useFont';
 import type { Note, Category } from '@/lib/types';
 import { toast } from 'sonner';
 
 export default function Home() {
   const [createOpen, setCreateOpen] = useState(false);
   const [importConfirmOpen, setImportConfirmOpen] = useState(false);
+  const [fontCommandOpen, setFontCommandOpen] = useState(false);
   const [pendingImport, setPendingImport] = useState<{ notes: Note[]; categories: Category[] } | null>(null);
   const importInputRef = useRef<HTMLInputElement>(null);
   const { notes, categories, importData } = useNotesStore();
   const { dark, toggle: toggleDark } = useDarkMode();
+  const { activeFont, setFont } = useFont();
 
   const openCreate = useCallback(() => {
     setCreateOpen(true);
@@ -114,6 +118,10 @@ export default function Home() {
                   {dark ? <Sun className="size-4" /> : <Moon className="size-4" />}
                   {dark ? 'Light mode' : 'Dark mode'}
                 </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setFontCommandOpen(true)}>
+                  <Type className="size-4" />
+                  Change font
+                </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleExport}>
                   <Download className="size-4" />
@@ -147,6 +155,12 @@ export default function Home() {
         onChange={handleImportFile}
       />
       <CreateNoteDialog open={createOpen} onOpenChange={setCreateOpen} />
+      <FontCommandDialog
+        open={fontCommandOpen}
+        onOpenChange={setFontCommandOpen}
+        activeFont={activeFont}
+        onSelectFont={setFont}
+      />
       <ImportConfirmDialog
         open={importConfirmOpen}
         onOpenChange={setImportConfirmOpen}

@@ -121,16 +121,16 @@
   }
   body {
     @apply bg-background text-foreground;
-    font-family: var(--font-jakarta), system-ui, sans-serif;
+    font-family: var(--font-app, var(--font-jakarta)), system-ui, sans-serif;
   }
   html {
-    font-family: var(--font-jakarta), system-ui, sans-serif;
+    font-family: var(--font-app, var(--font-jakarta)), system-ui, sans-serif;
   }
 }
 
 /* Font utility classes */
 .font-content {
-  font-family: var(--font-jakarta), system-ui, sans-serif;
+  font-family: var(--font-app, var(--font-jakarta)), system-ui, sans-serif;
 }
 .font-ui {
   font-family: var(--font-outfit), system-ui, sans-serif;
