@@ -91,7 +91,7 @@ export function ViewNoteDialog({ note, open, onOpenChange }: ViewNoteDialogProps
 
   // Only show the last (most recent by timestamp) action for history label
   const latestHistory = [...(liveNote?.history ?? note.history)]
-    .sort((a, b) => b.timestamp - a.timestamp)[0];
+    .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())[0];
 
   const historyLabel: Record<string, string> = {
     created: 'Created',
