@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { X, Image as ImageIcon } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
@@ -27,6 +27,9 @@ export function CreateNoteDialog({ open, onOpenChange }: CreateNoteDialogProps) 
   const handleSave = useCallback(() => {
     if (isHtmlEmpty(htmlContent)) return;
     addNote(htmlContent, categoryId, thumbnail ?? undefined);
+    setHtmlContent('<p></p>');
+    setCategoryId(null);
+    setThumbnail(null);
     onOpenChange(false);
   }, [htmlContent, categoryId, thumbnail, addNote, onOpenChange]);
 
@@ -57,6 +60,15 @@ export function CreateNoteDialog({ open, onOpenChange }: CreateNoteDialogProps) 
     reader.readAsDataURL(file);
     e.target.value = '';
   }, []);
+
+  // Reset form when dialog opens (fixes content persisting from previous note)
+  useEffect(() => {
+    if (open) {
+      setHtmlContent('<p></p>');
+      setCategoryId(null);
+      setThumbnail(null);
+    }
+  }, [open]);
 
   const textLength = htmlToText(htmlContent).length;
   const fontSize = getDynamicFontSize(textLength);
