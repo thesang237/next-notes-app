@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { Palette } from 'lucide-react';
+import { Palette, Pencil } from 'lucide-react';
 import { useNotesStore } from '@/store/useNotesStore';
 import { AddCategoryPopover } from './AddCategoryPopover';
 import { CategoryColorPicker } from './CategoryColorPicker';
@@ -35,6 +35,8 @@ export function CategoryTabRow({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editOpen, setEditOpen] = useState(false);
   const [colorPickerOpenId, setColorPickerOpenId] = useState<string | null>(null);
+  const [nameEditingId, setNameEditingId] = useState<string | null>(null);
+  const [pendingName, setPendingName] = useState('');
   const menuRef = useRef<HTMLDivElement>(null);
 
   const closeContextMenu = useCallback(() => setContextMenu(null), []);
@@ -154,6 +156,107 @@ export function CategoryTabRow({
                     setColorPickerOpenId(null);
                   }}
                 />
+              </PopoverContent>
+            </Popover>
+
+            {/* Name edit popup — pencil icon on hover */}
+            <Popover
+              open={nameEditingId === cat.id}
+              onOpenChange={(v) => {
+                if (!v) {
+                  setNameEditingId(null);
+                  setPendingName('');
+                }
+              }}
+            >
+              <PopoverTrigger
+                aria-label={`Edit name for ${cat.name}`}
+                tabIndex={-1}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setNameEditingId(cat.id);
+                  setPendingName(cat.name);
+                }}
+                className={cn(
+                  'absolute left-2 top-1/2 -translate-y-1/2',
+                  'flex size-4 items-center justify-center rounded-full',
+                  'transition-all duration-200',
+                  'opacity-0 group-hover/pill:opacity-100 group-hover/pill:scale-100',
+                  'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
+                  isSelected(cat.id)
+                    ? 'text-background/60 hover:text-background'
+                    : 'text-foreground/40 hover:text-foreground'
+                )}
+              >
+                <Pencil className="size-3" />
+              </PopoverTrigger>
+              <PopoverContent
+                className="w-56 p-3"
+                side="bottom"
+                align="start"
+                sideOffset={6}
+              >
+                <div className="flex flex-col gap-2">
+                  <input
+                    type="text"
+                    value={pendingName}
+                    onChange={(e) => setPendingName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        const trimmed = pendingName.trim();
+                        if (trimmed && nameEditingId) {
+                          const duplicate = categories.some(
+                            (c) => c.id !== nameEditingId && 
+                                   c.name.toLowerCase() === trimmed.toLowerCase()
+                          );
+                          if (!duplicate) {
+                            updateCategory(nameEditingId, { name: trimmed });
+                          }
+                        }
+                        setNameEditingId(null);
+                        setPendingName('');
+                      }
+                      if (e.key === 'Escape') {
+                        setNameEditingId(null);
+                        setPendingName('');
+                      }
+                    }}
+                    className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus:border-ring focus:ring-1"
+                    autoFocus
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setNameEditingId(null);
+                        setPendingName('');
+                      }}
+                      className="flex-1 rounded-md py-1.5 text-xs text-muted-foreground hover:bg-muted transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const trimmed = pendingName.trim();
+                        if (trimmed && nameEditingId) {
+                          const duplicate = categories.some(
+                            (c) => c.id !== nameEditingId && 
+                                   c.name.toLowerCase() === trimmed.toLowerCase()
+                          );
+                          if (!duplicate) {
+                            updateCategory(nameEditingId, { name: trimmed });
+                          }
+                        }
+                        setNameEditingId(null);
+                        setPendingName('');
+                      }}
+                      className="flex-1 rounded-md bg-foreground py-1.5 text-xs text-background hover:opacity-90 transition-opacity"
+                    >
+                      Save
+                    </button>
+                  </div>
+                </div>
               </PopoverContent>
             </Popover>
           </div>
