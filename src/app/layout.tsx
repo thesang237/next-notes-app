@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Plus_Jakarta_Sans, Outfit } from "next/font/google";
 import { Toaster } from "sonner";
 import "./globals.css";
+import { Analytics } from "@vercel/analytics/next"
 
 const jakartaSans = Plus_Jakarta_Sans({
   variable: "--font-jakarta",
@@ -52,6 +53,7 @@ export default function RootLayout({
         {children}
         <Toaster position="bottom-right" />
       </body>
+      <Analytics />
     </html>
   );
 }
