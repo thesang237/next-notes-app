@@ -1,12 +1,14 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { nanoid } from 'nanoid';
-import type { Note, Category } from '@/lib/types';
+import type { Note, Category, TimeFilter } from '@/lib/types';
 
 interface NotesState {
   notes: Note[];
   categories: Category[];
   activeBoardFilter: string | null;
+  hideResolved: boolean;
+  timeFilter: TimeFilter;
 
   addNote: (content: string, categoryId: string | null, thumbnail?: string) => void;
   updateNote: (id: string, updates: Partial<Pick<Note, 'content' | 'categoryId' | 'isSolved' | 'thumbnail'>>) => void;
@@ -15,6 +17,8 @@ interface NotesState {
   updateCategory: (id: string, updates: Partial<Pick<Category, 'name' | 'color'>>) => void;
   removeCategory: (id: string) => void;
   setActiveBoardFilter: (categoryId: string | null) => void;
+  toggleHideResolved: () => void;
+  setTimeFilter: (filter: TimeFilter) => void;
   restoreNote: (note: Note, index: number) => void;
   importData: (data: { notes: Note[]; categories: Category[] }, mode: 'replace' | 'merge') => void;
   /** Replace store state with cloud data (used by Firestore listener) */
@@ -29,6 +33,8 @@ export const useNotesStore = create<NotesState>()(
       notes: [],
       categories: [],
       activeBoardFilter: null,
+      hideResolved: false,
+      timeFilter: 'all' as TimeFilter,
 
       addNote: (content, categoryId, thumbnail) =>
         set((state) => ({
@@ -108,6 +114,12 @@ export const useNotesStore = create<NotesState>()(
 
       setActiveBoardFilter: (categoryId) =>
         set({ activeBoardFilter: categoryId }),
+
+      toggleHideResolved: () =>
+        set((state) => ({ hideResolved: !state.hideResolved })),
+
+      setTimeFilter: (filter) =>
+        set({ timeFilter: filter }),
 
       restoreNote: (note, index) =>
         set((state) => {

@@ -1,3 +1,5 @@
+export type TimeFilter = 'all' | 'today' | 'week' | 'month';
+
 export interface Category {
   id: string;
   name: string;
