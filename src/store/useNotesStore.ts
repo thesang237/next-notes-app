@@ -17,6 +17,10 @@ interface NotesState {
   setActiveBoardFilter: (categoryId: string | null) => void;
   restoreNote: (note: Note, index: number) => void;
   importData: (data: { notes: Note[]; categories: Category[] }, mode: 'replace' | 'merge') => void;
+  /** Replace store state with cloud data (used by Firestore listener) */
+  setSyncedData: (notes: Note[], categories: Category[]) => void;
+  /** Clear all notes and categories (used on sign-out) */
+  clearData: () => void;
 }
 
 export const useNotesStore = create<NotesState>()(
@@ -124,6 +128,12 @@ export const useNotesStore = create<NotesState>()(
             categories: [...state.categories, ...data.categories.filter((c) => !existingCategoryIds.has(c.id))],
           };
         }),
+
+      setSyncedData: (notes, categories) =>
+        set({ notes, categories }),
+
+      clearData: () =>
+        set({ notes: [], categories: [], activeBoardFilter: null }),
     }),
     {
       name: 'notes-storage',
