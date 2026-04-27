@@ -5,6 +5,7 @@ import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
 import { Bold, Italic, Strikethrough, List, ListOrdered } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useEffect, useRef } from 'react';
 
 interface RichTextEditorProps {
   content: string;
@@ -31,6 +32,14 @@ export function RichTextEditor({
   autoFocus = false,
   bgColor,
 }: RichTextEditorProps) {
+  const onEscapeRef = useRef(onEscape);
+  const onSaveRef = useRef(onSave);
+
+  useEffect(() => {
+    onEscapeRef.current = onEscape;
+    onSaveRef.current = onSave;
+  }, [onEscape, onSave]);
+
   const editor = useEditor({
     immediatelyRender: false,
     extensions: [StarterKit, Placeholder.configure({ placeholder })],
@@ -44,12 +53,12 @@ export function RichTextEditor({
       handleKeyDown: (_view, event) => {
         if (event.key === 'Escape') {
           event.preventDefault();
-          onEscape?.();
+          onEscapeRef.current?.();
           return true;
         }
         if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
           event.preventDefault();
-          onSave?.();
+          onSaveRef.current?.();
           return true;
         }
         return false;

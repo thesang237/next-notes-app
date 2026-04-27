@@ -141,8 +141,18 @@ export const useNotesStore = create<NotesState>()(
           };
         }),
 
-      setSyncedData: (notes, categories) =>
-        set({ notes, categories }),
+      setSyncedData: (newNotes, newCategories) =>
+        set((state) => {
+          const notesChanged = JSON.stringify(state.notes) !== JSON.stringify(newNotes);
+          const categoriesChanged = JSON.stringify(state.categories) !== JSON.stringify(newCategories);
+          
+          if (!notesChanged && !categoriesChanged) return state;
+          
+          return {
+            notes: notesChanged ? newNotes : state.notes,
+            categories: categoriesChanged ? newCategories : state.categories,
+          };
+        }),
 
       clearData: () =>
         set({ notes: [], categories: [], activeBoardFilter: null }),
