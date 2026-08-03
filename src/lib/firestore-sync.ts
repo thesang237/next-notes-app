@@ -77,6 +77,71 @@ export async function mergeUserData(uid: string, localData: CloudData): Promise<
 }
 
 /**
+ * Three-way merge by id: applies whatever this client added/edited/removed
+ * between `base` (the last cloud state it knows it's in sync with) and
+ * `local` (its current state) on top of `remote` (the freshest cloud state,
+ * read inside the same transaction). This means a note added, edited, or
+ * deleted by a *different* device since our last sync is preserved instead
+ * of being clobbered by a blind overwrite.
+ */
+function mergeById<T extends { id: string }>(base: T[], local: T[], remote: T[]): T[] {
+  const baseIds = new Set(base.map((x) => x.id));
+  const localIds = new Set(local.map((x) => x.id));
+  const localById = new Map(local.map((x) => [x.id, x]));
+  const remoteIds = new Set(remote.map((x) => x.id));
+
+  // Present in the last known sync point but gone locally now -> we deleted it.
+  const removedIds = new Set([...baseIds].filter((id) => !localIds.has(id)));
+
+  const merged = remote
+    .filter((r) => !removedIds.has(r.id))
+    // Apply this client's edits on top of whatever is currently in the cloud.
+    .map((r) => localById.get(r.id) ?? r);
+
+  // Items this client added that the cloud doesn't know about yet.
+  for (const item of local) {
+    if (!remoteIds.has(item.id)) merged.push(item);
+  }
+
+  return merged;
+}
+
+/**
+ * Push local changes to Firestore, safely merging with any concurrent
+ * changes from other devices instead of blindly overwriting the cloud copy.
+ * Returns the merged data that now lives in the cloud so the caller can
+ * update its own "last synced" baseline and local store.
+ */
+export async function pushUserData(
+  uid: string,
+  base: CloudData,
+  local: CloudData
+): Promise<CloudData> {
+  const ref = userRef(uid);
+  return runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref);
+    const remote: CloudData = snap.exists()
+      ? {
+          notes: Array.isArray(snap.data().notes) ? snap.data().notes : [],
+          categories: Array.isArray(snap.data().categories) ? snap.data().categories : [],
+        }
+      : { notes: [], categories: [] };
+
+    const merged: CloudData = {
+      notes: mergeById(base.notes, local.notes, remote.notes),
+      categories: mergeById(base.categories, local.categories, remote.categories),
+    };
+
+    tx.set(ref, {
+      notes: merged.notes,
+      categories: merged.categories,
+      updatedAt: serverTimestamp(),
+    });
+    return merged;
+  });
+}
+
+/**
  * Subscribe to real-time Firestore changes for this user.
  * Calls `callback` with the latest CloudData whenever it changes.
  * `hasPendingWrites` is true for the local latency-compensation echo of our

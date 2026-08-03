@@ -34,7 +34,9 @@ import {
   getUserData,
   setUserData,
   mergeUserData,
+  pushUserData,
   subscribeToUserData,
+  type CloudData,
 } from '@/lib/firestore-sync';
 import type { Note, Category } from '@/lib/types';
 import { toast } from 'sonner';
@@ -59,6 +61,14 @@ export default function Home() {
    * can never overwrite cloud data before the user has made a choice.
    */
   const syncReadyRef = useRef(false);
+  /**
+   * The last cloud state this client is known to be in sync with — either
+   * from the live listener or from a push it made itself. Every debounced
+   * push diffs the current local state against this baseline so only *this
+   * client's* actual changes are applied on top of the freshest cloud data,
+   * instead of blindly overwriting whatever another device may have written.
+   */
+  const lastSyncedRef = useRef<CloudData>({ notes: [], categories: [] });
   const importInputRef = useRef<HTMLInputElement>(null);
 
   const { notes, categories, importData, setSyncedData, clearData } = useNotesStore();
@@ -72,6 +82,7 @@ export default function Home() {
       firestoreUnsubRef.current?.();
       firestoreUnsubRef.current = subscribeToUserData(uid, (data, hasPendingWrites) => {
         if (hasPendingWrites) return;
+        lastSyncedRef.current = data;
         setSyncedData(data.notes, data.categories);
       });
     },
@@ -86,6 +97,7 @@ export default function Home() {
       firestoreUnsubRef.current?.();
       firestoreUnsubRef.current = null;
       syncReadyRef.current = false;
+      lastSyncedRef.current = { notes: [], categories: [] };
       return;
     }
 
@@ -123,10 +135,17 @@ export default function Home() {
             setIsSyncing(false);
             return; // syncReadyRef stays false until resolved
           }
+          // Identical — nothing to reconcile, but record the baseline.
+          lastSyncedRef.current = cloudData!;
         } else if (hasCloud && !hasLocal) {
           setSyncedData(cloudData!.notes, cloudData!.categories);
+          lastSyncedRef.current = cloudData!;
         } else if (!hasCloud && hasLocal) {
           await setUserData(uid, { notes: localNotes, categories: localCategories });
+          lastSyncedRef.current = { notes: localNotes, categories: localCategories };
+        } else {
+          // Both empty, or cloud was identical to local — nothing to reconcile.
+          lastSyncedRef.current = cloudData ?? { notes: [], categories: [] };
         }
         if (cancelled) return;
 
@@ -148,16 +167,30 @@ export default function Home() {
   }, [user, setSyncedData, startListener]);
 
   // ── Write-through: push to Firestore on every store mutation (debounced) ──
-  // Suspended until reconciliation has completed for the current user.
+  // Suspended until reconciliation has completed for the current user. Uses a
+  // 3-way merge (diffing against the last known cloud baseline) rather than a
+  // blind overwrite, so concurrent edits from another device/tab survive.
   useEffect(() => {
     if (!user || !syncReadyRef.current) return;
     const timer = setTimeout(() => {
-      setUserData(user.uid, { notes, categories }).catch(() => {
-        // Silently fail — next mutation will retry
-      });
+      const uid = user.uid;
+      const base = lastSyncedRef.current;
+      const local: CloudData = { notes, categories };
+      setIsSyncing(true);
+      pushUserData(uid, base, local)
+        .then((merged) => {
+          lastSyncedRef.current = merged;
+          // Pick up anything another device contributed concurrently.
+          setSyncedData(merged.notes, merged.categories);
+        })
+        .catch(() => {
+          // Silently fail — the next mutation (or reconnect) retries against
+          // the same baseline, so no changes are lost.
+        })
+        .finally(() => setIsSyncing(false));
     }, 800);
     return () => clearTimeout(timer);
-  }, [user, notes, categories]);
+  }, [user, notes, categories, setSyncedData]);
 
   // ── Sign-in flow ──────────────────────────────────────────────────────────
   // Reconciliation is handled by the effect above (which fires once the auth
@@ -186,6 +219,7 @@ export default function Home() {
         notes: localNotes,
         categories: localCategories,
       });
+      lastSyncedRef.current = merged;
       setSyncedData(merged.notes, merged.categories);
       syncReadyRef.current = true;
       startListener(pending.uid);
@@ -201,6 +235,7 @@ export default function Home() {
     const pending = pendingSignInRef.current;
     if (!pending) return;
     setConflictOpen(false);
+    lastSyncedRef.current = { notes: pending.cloudNotes, categories: pending.cloudCategories };
     setSyncedData(pending.cloudNotes, pending.cloudCategories);
     syncReadyRef.current = true;
     startListener(pending.uid);
