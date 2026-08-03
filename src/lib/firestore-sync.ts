@@ -3,6 +3,7 @@ import {
   getDoc,
   setDoc,
   onSnapshot,
+  runTransaction,
   serverTimestamp,
   type Unsubscribe,
 } from 'firebase/firestore';
@@ -38,41 +39,63 @@ export async function setUserData(uid: string, data: CloudData): Promise<void> {
   });
 }
 
-/** Merge local data into cloud data (dedup by id). Writes result back. */
+/**
+ * Merge local data into cloud data (dedup by id) atomically.
+ *
+ * Runs inside a Firestore transaction so a concurrent write from another
+ * device can't clobber the merge result (read-modify-write is otherwise racy).
+ * When an id exists in both places the cloud copy wins.
+ */
 export async function mergeUserData(uid: string, localData: CloudData): Promise<CloudData> {
-  const cloudData = await getUserData(uid);
-  if (!cloudData) {
-    await setUserData(uid, localData);
-    return localData;
-  }
-  const cloudNoteIds = new Set(cloudData.notes.map((n) => n.id));
-  const cloudCatIds = new Set(cloudData.categories.map((c) => c.id));
-  const merged: CloudData = {
-    notes: [...cloudData.notes, ...localData.notes.filter((n) => !cloudNoteIds.has(n.id))],
-    categories: [
-      ...cloudData.categories,
-      ...localData.categories.filter((c) => !cloudCatIds.has(c.id)),
-    ],
-  };
-  await setUserData(uid, merged);
-  return merged;
+  const ref = userRef(uid);
+  return runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref);
+    const cloud: CloudData = snap.exists()
+      ? {
+          notes: Array.isArray(snap.data().notes) ? snap.data().notes : [],
+          categories: Array.isArray(snap.data().categories) ? snap.data().categories : [],
+        }
+      : { notes: [], categories: [] };
+
+    const cloudNoteIds = new Set(cloud.notes.map((n) => n.id));
+    const cloudCatIds = new Set(cloud.categories.map((c) => c.id));
+    const merged: CloudData = {
+      notes: [...cloud.notes, ...localData.notes.filter((n) => !cloudNoteIds.has(n.id))],
+      categories: [
+        ...cloud.categories,
+        ...localData.categories.filter((c) => !cloudCatIds.has(c.id)),
+      ],
+    };
+
+    tx.set(ref, {
+      notes: merged.notes,
+      categories: merged.categories,
+      updatedAt: serverTimestamp(),
+    });
+    return merged;
+  });
 }
 
 /**
  * Subscribe to real-time Firestore changes for this user.
  * Calls `callback` with the latest CloudData whenever it changes.
+ * `hasPendingWrites` is true for the local latency-compensation echo of our
+ * own writes — callers should ignore those to avoid write/read loops.
  * Returns an unsubscribe function.
  */
 export function subscribeToUserData(
   uid: string,
-  callback: (data: CloudData) => void
+  callback: (data: CloudData, hasPendingWrites: boolean) => void
 ): Unsubscribe {
   return onSnapshot(userRef(uid), (snap) => {
     if (!snap.exists()) return;
     const data = snap.data();
-    callback({
-      notes: Array.isArray(data.notes) ? data.notes : [],
-      categories: Array.isArray(data.categories) ? data.categories : [],
-    });
+    callback(
+      {
+        notes: Array.isArray(data.notes) ? data.notes : [],
+        categories: Array.isArray(data.categories) ? data.categories : [],
+      },
+      snap.metadata.hasPendingWrites
+    );
   });
 }

@@ -53,6 +53,12 @@ export default function Home() {
 
   const [isSyncing, setIsSyncing] = useState(false);
   const firestoreUnsubRef = useRef<Unsubscribe | null>(null);
+  /**
+   * Gates the write-through effect. It stays false while a sign-in is being
+   * reconciled (or an unresolved conflict is pending) so the debounced push
+   * can never overwrite cloud data before the user has made a choice.
+   */
+  const syncReadyRef = useRef(false);
   const importInputRef = useRef<HTMLInputElement>(null);
 
   const { notes, categories, importData, setSyncedData, clearData } = useNotesStore();
@@ -60,34 +66,91 @@ export default function Home() {
   const { activeFont, setFont } = useFont();
   const { user, loading, signInWithGoogle, signOut } = useAuth();
 
-  // ── Firestore real-time listener ──────────────────────────────────────────
+  // ── Real-time listener (ignores our own local write echoes) ───────────────
+  const startListener = useCallback(
+    (uid: string) => {
+      firestoreUnsubRef.current?.();
+      firestoreUnsubRef.current = subscribeToUserData(uid, (data, hasPendingWrites) => {
+        if (hasPendingWrites) return;
+        setSyncedData(data.notes, data.categories);
+      });
+    },
+    [setSyncedData]
+  );
+
+  // ── Reconcile local ⇄ cloud on login, then attach the live listener ───────
+  // Runs for BOTH fresh popup sign-in and sessions restored on reload, so a
+  // stale local copy can never overwrite newer cloud data.
   useEffect(() => {
     if (!user) {
       firestoreUnsubRef.current?.();
       firestoreUnsubRef.current = null;
+      syncReadyRef.current = false;
       return;
     }
 
-    // Skip the very first snapshot so we don't overwrite data we just wrote
-    let initialSkip = true;
-    const unsub = subscribeToUserData(user.uid, (data) => {
-      if (initialSkip) {
-        initialSkip = false;
-        return;
-      }
-      setSyncedData(data.notes, data.categories);
-    });
+    const uid = user.uid;
+    let cancelled = false;
+    syncReadyRef.current = false;
+    setIsSyncing(true);
 
-    firestoreUnsubRef.current = unsub;
+    (async () => {
+      try {
+        const cloudData = await getUserData(uid);
+        if (cancelled) return;
+
+        // Read the freshest store values (avoids stale-closure bugs).
+        const { notes: localNotes, categories: localCategories } = useNotesStore.getState();
+        const hasLocal = localNotes.length > 0 || localCategories.length > 0;
+        const hasCloud =
+          cloudData !== null &&
+          (cloudData.notes.length > 0 || cloudData.categories.length > 0);
+
+        if (hasCloud && hasLocal) {
+          const identical =
+            JSON.stringify(cloudData!.notes) === JSON.stringify(localNotes) &&
+            JSON.stringify(cloudData!.categories) === JSON.stringify(localCategories);
+
+          if (!identical) {
+            // Genuine conflict — pause syncing and ask the user what to do.
+            pendingSignInRef.current = {
+              uid,
+              cloudNotes: cloudData!.notes,
+              cloudCategories: cloudData!.categories,
+            };
+            setConflictCloudCount(cloudData!.notes.length);
+            setConflictOpen(true);
+            setIsSyncing(false);
+            return; // syncReadyRef stays false until resolved
+          }
+        } else if (hasCloud && !hasLocal) {
+          setSyncedData(cloudData!.notes, cloudData!.categories);
+        } else if (!hasCloud && hasLocal) {
+          await setUserData(uid, { notes: localNotes, categories: localCategories });
+        }
+        if (cancelled) return;
+
+        syncReadyRef.current = true;
+        startListener(uid);
+        setIsSyncing(false);
+      } catch {
+        if (cancelled) return;
+        setIsSyncing(false);
+        toast.error('Sync failed. Changes are saved locally.');
+      }
+    })();
+
     return () => {
-      unsub();
+      cancelled = true;
+      firestoreUnsubRef.current?.();
       firestoreUnsubRef.current = null;
     };
-  }, [user, setSyncedData]);
+  }, [user, setSyncedData, startListener]);
 
   // ── Write-through: push to Firestore on every store mutation (debounced) ──
+  // Suspended until reconciliation has completed for the current user.
   useEffect(() => {
-    if (!user) return;
+    if (!user || !syncReadyRef.current) return;
     const timer = setTimeout(() => {
       setUserData(user.uid, { notes, categories }).catch(() => {
         // Silently fail — next mutation will retry
@@ -97,51 +160,19 @@ export default function Home() {
   }, [user, notes, categories]);
 
   // ── Sign-in flow ──────────────────────────────────────────────────────────
+  // Reconciliation is handled by the effect above (which fires once the auth
+  // state updates), so this just triggers the popup and surfaces errors.
   const handleSignIn = useCallback(async () => {
     try {
-      setIsSyncing(true);
-      const firebaseUser = await signInWithGoogle();
-      const cloudData = await getUserData(firebaseUser.uid);
-      const hasLocal = notes.length > 0;
-      const hasCloud = cloudData !== null && cloudData.notes.length > 0;
-
-      if (hasCloud && hasLocal) {
-        // Conflict — ask user
-        pendingSignInRef.current = {
-          uid: firebaseUser.uid,
-          cloudNotes: cloudData.notes,
-          cloudCategories: cloudData.categories,
-        };
-        setConflictCloudCount(cloudData.notes.length);
-        setConflictOpen(true);
-        setIsSyncing(false);
-        return;
-      }
-
-      if (hasCloud && !hasLocal) {
-        // Pull cloud data down
-        setSyncedData(cloudData.notes, cloudData.categories);
-        toast.success(`Synced ${cloudData.notes.length} note${cloudData.notes.length === 1 ? '' : 's'} from cloud.`);
-      } else {
-        // Push local data up (covers hasLocal && !hasCloud, and empty both)
-        await setUserData(firebaseUser.uid, { notes, categories });
-        if (hasLocal) {
-          toast.success(`Uploaded ${notes.length} note${notes.length === 1 ? '' : 's'} to cloud.`);
-        } else {
-          toast.success(`Signed in as ${firebaseUser.displayName ?? firebaseUser.email}.`);
-        }
-      }
-
-      setIsSyncing(false);
+      await signInWithGoogle();
     } catch (err: unknown) {
-      setIsSyncing(false);
       const msg = err instanceof Error ? err.message : String(err);
       // Popup closed by user — not a real error
       if (!msg.includes('popup-closed') && !msg.includes('cancelled')) {
         toast.error('Sign-in failed. Please try again.');
       }
     }
-  }, [signInWithGoogle, notes, categories, setSyncedData]);
+  }, [signInWithGoogle]);
 
   // ── Conflict resolution ───────────────────────────────────────────────────
   const handleConflictMerge = useCallback(async () => {
@@ -150,34 +181,46 @@ export default function Home() {
     setConflictOpen(false);
     setIsSyncing(true);
     try {
-      const merged = await mergeUserData(pending.uid, { notes, categories });
+      const { notes: localNotes, categories: localCategories } = useNotesStore.getState();
+      const merged = await mergeUserData(pending.uid, {
+        notes: localNotes,
+        categories: localCategories,
+      });
       setSyncedData(merged.notes, merged.categories);
+      syncReadyRef.current = true;
+      startListener(pending.uid);
       toast.success(`Merged — ${merged.notes.length} notes total.`);
     } catch {
       toast.error('Merge failed. Please try again.');
     }
     pendingSignInRef.current = null;
     setIsSyncing(false);
-  }, [notes, categories, setSyncedData]);
+  }, [setSyncedData, startListener]);
 
   const handleConflictUseCloud = useCallback(async () => {
     const pending = pendingSignInRef.current;
     if (!pending) return;
     setConflictOpen(false);
     setSyncedData(pending.cloudNotes, pending.cloudCategories);
+    syncReadyRef.current = true;
+    startListener(pending.uid);
     toast.success(`Loaded ${pending.cloudNotes.length} note${pending.cloudNotes.length === 1 ? '' : 's'} from cloud.`);
     pendingSignInRef.current = null;
-  }, [setSyncedData]);
+  }, [setSyncedData, startListener]);
 
   const handleConflictCancel = useCallback(async () => {
     setConflictOpen(false);
     pendingSignInRef.current = null;
-    // Sign the user back out — they cancelled
+    // Sign the user back out — they cancelled. syncReadyRef stays false, so
+    // nothing is pushed to the cloud.
     await signOut();
   }, [signOut]);
 
   // ── Sign-out ──────────────────────────────────────────────────────────────
   const handleSignOut = useCallback(async () => {
+    // Disable write-through first so clearing the local store can't push an
+    // empty snapshot up and wipe the cloud copy.
+    syncReadyRef.current = false;
     await signOut();
     clearData();
     toast.success('Signed out.');
